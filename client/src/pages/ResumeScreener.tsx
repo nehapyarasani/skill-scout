@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useDropzone } from "react-dropzone";
-import { UploadCloud, FileText, CheckCircle2, AlertCircle, ArrowRight, Loader2 } from "lucide-react";
+import { UploadCloud, FileText, CheckCircle2, AlertCircle, ArrowRight, Loader2, BrainCircuit } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
 

@@ -16,21 +16,34 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Start Python Flask NLP Service
+  console.log("Starting Python Flask NLP Service...");
+  let pythonProcess: any = null;
+  
+  try {
+    // Use 'python3' for broader compatibility across systems (Windows/Linux/Mac)
+    pythonProcess = spawn('python3', ['server/nlp_service.py'], {
+      cwd: process.cwd(),
+      shell: true
+    });
 
-  // Start Python NLP Service
-  console.log("Starting Python NLP Service...");
-  const pythonProcess = spawn('python3', ['server/nlp_service.py']);
+    pythonProcess.stdout.on('data', (data: any) => {
+      console.log(`[NLP Service]: ${data}`);
+    });
 
-  pythonProcess.stdout.on('data', (data) => {
-    console.log(`[NLP Service]: ${data}`);
-  });
+    pythonProcess.stderr.on('data', (data: any) => {
+      console.error(`[NLP Service Error]: ${data}`);
+    });
 
-  pythonProcess.stderr.on('data', (data) => {
-    console.error(`[NLP Service Error]: ${data}`);
-  });
+    pythonProcess.on('error', (err: any) => {
+      console.error(`Failed to start NLP service: ${err.message}`);
+    });
 
-  // Wait for service to be ready (simple delay for MVP)
-  await new Promise(resolve => setTimeout(resolve, 5000));
+    // Wait for Flask to start
+    await new Promise(resolve => setTimeout(resolve, 3000));
+  } catch (error) {
+    console.error('Error starting Flask service:', error);
+  }
 
   const NLP_SERVICE_URL = 'http://localhost:5001';
 
@@ -53,7 +66,8 @@ export async function registerRoutes(
         const response = await axios.post(`${NLP_SERVICE_URL}/analyze/resume`, formData, {
           headers: {
             ...formData.getHeaders()
-          }
+          },
+          timeout: 30000
         });
 
         // Log analysis
@@ -67,13 +81,14 @@ export async function registerRoutes(
         res.json(response.data);
       } catch (error: any) {
         console.error("NLP Service Error:", error.response?.data || error.message);
-        res.status(500).json({ message: "Failed to analyze resume" });
+        res.status(500).json({ message: "Failed to analyze resume: " + (error.message || 'Unknown error') });
       } finally {
         // Cleanup temp file
         fs.unlink(req.file.path, () => {});
       }
 
     } catch (err) {
+      console.error('Resume analysis error:', err);
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -83,7 +98,9 @@ export async function registerRoutes(
       const input = api.analysis.analyzeJob.input.parse(req.body);
       
       try {
-        const response = await axios.post(`${NLP_SERVICE_URL}/analyze/jd`, input);
+        const response = await axios.post(`${NLP_SERVICE_URL}/analyze/jd`, input, {
+          timeout: 30000
+        });
         
         await storage.logAnalysis({
           type: 'job',
@@ -93,7 +110,7 @@ export async function registerRoutes(
         res.json(response.data);
       } catch (error: any) {
         console.error("NLP Service Error:", error.response?.data || error.message);
-        res.status(500).json({ message: "Failed to analyze job description" });
+        res.status(500).json({ message: "Failed to analyze job description: " + (error.message || 'Unknown error') });
       }
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -102,6 +119,7 @@ export async function registerRoutes(
           field: err.errors[0].path.join('.'),
         });
       } else {
+        console.error('Job analysis error:', err);
         res.status(500).json({ message: "Internal server error" });
       }
     }
